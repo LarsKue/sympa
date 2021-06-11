@@ -1,4 +1,5 @@
 
+import torch
 from torch import nn
 from .fit import ModelFitMixin
 
@@ -11,10 +12,17 @@ from .fit import ModelFitMixin
 
 
 class MetricEstimator(ModelFitMixin, nn.Module):
-    def __init__(self):
-        super(MetricEstimator, self).__init__()
-
-
-class SiegelMetricEstimator(MetricEstimator):
     def __init__(self, ndim=2):
-        pass
+
+        self.input_shape = torch.Tensor([2, ndim, ndim])
+
+        super(MetricEstimator, self).__init__(
+            nn.Linear(in_features=torch.prod(self.input_shape).item(), out_features=1024),
+            nn.ReLU(),
+            nn.Linear(in_features=1024, out_features=512),
+            nn.Linear(in_features=512, out_features=256),
+            nn.Linear(in_features=256, out_features=1),
+            optimizer=torch.optim.SGD,
+            loss=nn.MSELoss(),
+
+        )

@@ -13,8 +13,14 @@ class ModelFitMixin(ModelMixin):
     """
 
     def __init__(self, *layers, optimizer, loss, train_loader, val_loader, batch_shape=None):
+        """
+        Due to restrictions from PyTorch, the optimizer
+        must be passed as an uninstantiated callable
+        >>> optimizer = torch.optim.SGD
+        >>> ModelFitMixin(..., optimizer, ...)
+        """
         super(ModelFitMixin, self).__init__(*layers)
-        self.optimizer = optimizer
+        self.optimizer = optimizer(self.model.parameters())
         self.loss = loss
         self.train_loader = train_loader
         self.val_loader = val_loader
