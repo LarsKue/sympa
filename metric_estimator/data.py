@@ -1,66 +1,80 @@
-
 import torch
-from torch.utils.data import Dataset, DataLoader
-import pandas as pd
-import pathlib as pl
+from torch.utils.data import IterableDataset
 
 from .device import device
+from .utils import symmetricize
 
 
-class MetricDistanceSet(Dataset):
-    def __init__(self, csv_file, root_dir, transform=None):
-        meta = pd.read_csv(csv_file)
+class MetricDistanceSet(IterableDataset):
+    def __init__(self, z1, z2, dist):
+        self.z1 = z1
+        self.z2 = z2
+        self.dist = dist
+
+    def __iter__(self):
+        return zip(self.z1, self.z2, self.dist)
 
     def __getitem__(self, item):
-        pass
+        return self.z1[item], self.z2[item], self.dist[item]
 
     def __len__(self):
-        pass
+        return len(self.dist)
+
+    @classmethod
+    def from_path(cls, path):
+        z1 = torch.load(path / "z1")
+        z2 = torch.load(path / "z2")
+        dist = torch.load(path / "dist")
+
+        return cls(z1, z2, dist)
+
+    @classmethod
+    def generate(cls, n, *, manifold, path):
+        if not path.is_dir():
+            raise NotADirectoryError(f"{path} is not a directory.")
+        if path.exists():
+            raise FileExistsError(f"Cannot overwrite {path}.")
+
+        path.mkdir(parents=True, exist_ok=False)
+
+        z1 = generate_points(n, ndim=manifold.ndim)
+        z2 = generate_points(n, ndim=manifold.ndim)
+        dist = manifold.dist(z1, z2)
+
+        torch.save(z1, path / "z1")
+        torch.save(z2, path / "z2")
+        torch.save(dist, path / "dist")
+
+        return cls(z1, z2, dist)
 
 
-class MetricDistanceLoader(DataLoader):
-    pass
+def generate_points(n, *, ndim):
 
-
-def symmetricize(x):
-    # make a tensor symmetric by copying the
-    # upper triangular part into the lower one
-    return x.triu() + x.triu(1).transpose(-1, -2)
-
-
-def generate_points(n, ndim):
     shape = (n, ndim, ndim)
 
     real = torch.randn(shape, device=device)
     imag = torch.randn(shape, device=device)
 
-    # symmetricizing preserves the distribution
+    # symmetricize
     real = symmetricize(real)
     imag = symmetricize(imag)
 
-    # make imaginary part positive definite
-    # by adding smallest eigenvalue on the diagonal
+    # TODO: Confirm with Federico that this is fine
+    #  since the distribution is affected by the dominant diagonal
+    # positive definiteness
     evs = torch.symeig(imag)
-    e = evs.eigenvalues[:, 0].unsqueeze(-1).unsqueeze(-1) + 1e-6
-    diag = e * torch.eye(ndim, device=device)
-    print(diag.shape, imag.shape, shape)
+    e = -evs.eigenvalues[:, 0] + 1
+    e = e.unsqueeze(-1).unsqueeze(-1)
 
+    diag = e * torch.eye(ndim, device=device)
     imag.add_(diag)
 
     return torch.stack((real, imag), dim=1)
 
 
-def generate(n, *, manifold, path):
-    if path.is_dir():
-        raise ValueError("Please choose a filename, not a directory.")
-    if path.exists():
-        raise FileExistsError(f"Cannot overwrite file {path}")
 
-    z1 = generate_points(n, manifold.ndim)
-    z2 = generate_points(n, manifold.ndim)
-    dists = manifold.dist(z1, z2)
 
-    # TODO: pickle
 
-    print(dists)
+
+
 

@@ -19,24 +19,37 @@ from sympa.manifolds import UpperHalfManifold
 
 
 class DatasetTest(unittest.TestCase):
-    def test_positive_definite(self):
-        z = data.generate_points(1000, 3)
+    def setUp(self) -> None:
+        self.ndims = [2, 3, 5, 10, 20, 50, 100]
+        self.n = 1000
 
-        # try to compute cholesky decomposition
-        # this works iff the matrix is hermitian positive definite
-        torch.linalg.cholesky(z)
+        self.zs = [
+            data.generate_points(self.n, ndim)
+            for ndim in self.ndims
+        ]
+
+        # TODO: Tests
+        # self.dataset = data.MetricDistanceSet.generate(self.n, manifold=)
+
+    def test_positive_definite(self):
+        for ndim, z in zip(self.ndims, self.zs):
+
+            real, imag = z[:, 0, :, :], z[:, 1, :, :]
+
+            # try to compute cholesky decomposition
+            # this works iff the matrix is hermitian positive definite
+            try:
+                torch.linalg.cholesky(imag)
+            except:
+                self.assertTrue(False, msg=f"Matrices of ndim = {ndim} are not positive definite.")
 
     def test_symmetric(self):
-        z = data.generate_points(1000, 3)
-        self.assertTrue(torch.allclose(z.transpose(-2, -1), z))
+        for ndim, z in zip(self.ndims, self.zs):
+            self.assertTrue(torch.allclose(z.transpose(-2, -1), z))
 
     def test_plot(self):
-        for ndim in [10, 20, 50, 100]:
-            z = data.generate_points(100, ndim)
-
+        for ndim, z in zip(self.ndims, self.zs):
             pts = torch.flatten(z).cpu().tolist()
-
-            print(np.mean(pts), np.std(pts))
 
             plt.hist(pts, bins=100)
             plt.show()
