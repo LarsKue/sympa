@@ -12,21 +12,25 @@ class ModelFitMixin(ModelMixin):
     Keep a history of losses throughout training
     """
 
-    def __init__(self, *layers, optimizer, loss, train_loader, val_loader, batch_shape=None):
-        """
-        Due to restrictions from PyTorch, the optimizer
-        must be passed as an uninstantiated callable
-        >>> optimizer = torch.optim.SGD
-        >>> ModelFitMixin(..., optimizer, ...)
-        """
+    def __init__(self, *layers):
         super(ModelFitMixin, self).__init__(*layers)
-        self.optimizer = optimizer(self.model.parameters())
+        self.optimizer = None
+        self.loss = None
+        self.train_loader = None
+        self.val_loader = None
+        self.batch_shape = None
+        self.train_loss = []
+        self.val_loss = []
+
+    def compile(self, *, optimizer, loss, train_loader, val_loader, batch_shape=None):
+        """
+        Set the model training parameters
+        """
+        self.optimizer = optimizer
         self.loss = loss
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.batch_shape = batch_shape
-        self.train_loss = []
-        self.val_loss = []
 
     def fit(self, epochs, validate=True, verbose=False):
         """

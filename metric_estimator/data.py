@@ -30,8 +30,6 @@ class MetricDistanceSet(IterableDataset):
 
     @classmethod
     def generate(cls, n, *, manifold, path):
-        if not path.is_dir():
-            raise NotADirectoryError(f"{path} is not a directory.")
         if path.exists():
             raise FileExistsError(f"Cannot overwrite {path}.")
 

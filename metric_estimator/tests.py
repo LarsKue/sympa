@@ -5,31 +5,27 @@ import torch
 from .core import MetricEstimator
 from . import data
 import pathlib as pl
+import shutil
 from matplotlib import pyplot as plt
 import numpy as np
 
 from sympa.manifolds import UpperHalfManifold
 
 
-
-
-# class MetricEstimatorTest(unittest.TestCase):
-#     def setUp(self) -> None:
-#         self.instance = MetricEstimator()
-
-
-class DatasetTest(unittest.TestCase):
+class MetricEstimatorTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.ndims = [2, 3, 5, 10, 20, 50, 100]
-        self.n = 1000
+        self.instance = MetricEstimator()
+
+
+class PointGenerationTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.ndims = [2, 3, 5, 10, 20]
+        self.n = 100
 
         self.zs = [
-            data.generate_points(self.n, ndim)
+            data.generate_points(self.n, ndim=ndim)
             for ndim in self.ndims
         ]
-
-        # TODO: Tests
-        # self.dataset = data.MetricDistanceSet.generate(self.n, manifold=)
 
     def test_positive_definite(self):
         for ndim, z in zip(self.ndims, self.zs):
@@ -47,19 +43,28 @@ class DatasetTest(unittest.TestCase):
         for ndim, z in zip(self.ndims, self.zs):
             self.assertTrue(torch.allclose(z.transpose(-2, -1), z))
 
-    def test_plot(self):
-        for ndim, z in zip(self.ndims, self.zs):
-            pts = torch.flatten(z).cpu().tolist()
+    # def test_plot(self):
+    #     for ndim, z in zip(self.ndims, self.zs):
+    #         pts = torch.flatten(z).cpu().tolist()
+    #
+    #         plt.hist(pts, bins=100)
+    #         plt.show()
 
-            plt.hist(pts, bins=100)
-            plt.show()
+
+class DatasetTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.n = 100
+        self.ndim = 10
+
+        # clear and recreate test data
+        self.path = pl.Path("test")
+        if self.path.exists():
+            shutil.rmtree(self.path)
+
+        self.manifold = UpperHalfManifold(ndim=self.ndim)
 
     def test_generate(self):
-        ndim = 3
-        manifold = UpperHalfManifold(ndim=ndim)
-        dataset = data.generate(3, manifold=manifold, path=pl.Path("asdf"))
-
-        print(dataset)
+        dataset = data.MetricDistanceSet.generate(self.n, manifold=self.manifold, path=self.path)
 
 
 class MiscTest(unittest.TestCase):
