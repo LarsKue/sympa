@@ -1,20 +1,24 @@
 
 import unittest
 import torch
+from torch.utils.data import DataLoader
 
 from .core import MetricEstimator
 from . import data
-import pathlib as pl
-import shutil
-from matplotlib import pyplot as plt
-import numpy as np
 
 from sympa.manifolds import UpperHalfManifold
 
-
+# TODO: Fix Tests (adjust for lack of from_ndim)
 class MetricEstimatorTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.instance = MetricEstimator()
+        self.ndim = 1000
+        self.instance = MetricEstimator.from_ndim(self.ndim, overwrite=True)
+
+    def tearDown(self) -> None:
+        pass
+
+    def test_fit(self):
+        self.instance.fit(epochs=75, verbose=True)
 
 
 class PointGenerationTest(unittest.TestCase):
@@ -55,16 +59,29 @@ class DatasetTest(unittest.TestCase):
     def setUp(self) -> None:
         self.n = 100
         self.ndim = 10
-
-        # clear and recreate test data
-        self.path = pl.Path("test")
-        if self.path.exists():
-            shutil.rmtree(self.path)
-
         self.manifold = UpperHalfManifold(ndim=self.ndim)
 
     def test_generate(self):
-        dataset = data.MetricDistanceSet.generate(self.n, manifold=self.manifold, path=self.path)
+        dataset = data.MetricDistanceSet.generate(self.n, manifold=self.manifold, path="_test", overwrite=True)
+
+        self.assertEqual(self.n, len(dataset))
+
+    def test_simple_generate(self):
+        dataset = data.SimpleMetricDistanceSet.generate(self.n, manifold=self.manifold)
+
+        self.assertEqual(self.n, len(dataset))
+
+    def test_iterate(self):
+        dataset = data.MetricDistanceSet.generate(self.n, manifold=self.manifold, path="_test", overwrite=True)
+
+        for i, (x, y) in enumerate(dataset):
+            pass
+
+    def test_simple_iterate(self):
+        dataset = data.SimpleMetricDistanceSet.generate(self.n, manifold=self.manifold)
+
+        for i, (x, y) in enumerate(dataset):
+            pass
 
 
 class MiscTest(unittest.TestCase):
