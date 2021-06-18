@@ -15,9 +15,9 @@ class MetricDistanceSet(Dataset):
     Suitable for high dimensional data, as it
     saves input tensors in individual files
     """
-    def __init__(self, z_path, labels):
+    def __init__(self, path, labels):
         self.labels = labels
-        self.z_path = z_path
+        self.path = path
 
     def __len__(self):
         return len(self.labels)
@@ -29,10 +29,18 @@ class MetricDistanceSet(Dataset):
         if item < 0:
             item = n - item
 
-        z = torch.load(self.z_path / str(item))
+        z = torch.load(self.path / str(item))
         y = self.labels[item].unsqueeze(-1)
 
         return z, y
+
+    @classmethod
+    def load(cls, path):
+        if not isinstance(path, pl.Path):
+            path = pl.Path(path)
+        labels = torch.load(path / "labels")
+
+        return cls(path, labels)
 
     @classmethod
     def generate(cls, n, manifold, path, overwrite=False):
@@ -61,6 +69,7 @@ class MetricDistanceSet(Dataset):
             dists.append(dist.item())
 
         dists = torch.Tensor(dists)
+        torch.save(dists, path / "labels")
         return cls(path, dists)
 
 

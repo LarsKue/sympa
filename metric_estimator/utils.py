@@ -28,3 +28,12 @@ def flat_batched_complex_triu(x):
 
     return x[:, :, rows, columns].reshape(output_shape)
 
+
+def mare(yhat, y):
+    """
+    Mean Absolute Relative Error
+    @param yhat: predicted value
+    @param y: ground truth
+    """
+    return torch.mean(torch.abs(yhat - y) / torch.abs(y), dim=0)
+

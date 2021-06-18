@@ -8,18 +8,6 @@ from . import data
 
 from sympa.manifolds import UpperHalfManifold
 
-# TODO: Fix Tests (adjust for lack of from_ndim)
-class MetricEstimatorTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.ndim = 1000
-        self.instance = MetricEstimator.from_ndim(self.ndim, overwrite=True)
-
-    def tearDown(self) -> None:
-        pass
-
-    def test_fit(self):
-        self.instance.fit(epochs=75, verbose=True)
-
 
 class PointGenerationTest(unittest.TestCase):
     def setUp(self) -> None:
