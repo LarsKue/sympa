@@ -1,39 +1,37 @@
 
-import torch
+from time import perf_counter
 
 
-def symmetricize(x):
-    # make a tensor symmetric by copying the
-    # upper triangular part into the lower one
-    return x.triu() + x.triu(1).transpose(-1, -2)
+class Timer:
+    def __init__(self, name=None, *, transform=lambda x: 1000.0 * x, unit_name="ms", precision=4, verbose=True):
+        self.name = name
+        self.begin = None
+        self.end = None
+        self.transform = transform
+        self.unit_name = unit_name
+        self.precision = precision
+        self.verbose = verbose
 
+    def start(self):
+        self.begin = perf_counter()
 
-def flat_batched_complex_triu(x):
-    """
-    Takes a batch of complex (symmetric) matrices
-    x of shape (batch_size, 2, ndim, ndim)
-    and returns the flattened upper triangular part
-    of each sample in the shape (batch_size, ndim * (ndim + 1))
-    """
-    batch_size = x.shape[0]
-    ndim = x.shape[-1]
+    def stop(self):
+        self.end = perf_counter()
 
-    input_shape = (batch_size, 2, ndim, ndim)
-    output_shape = (batch_size, -1)
+    def duration(self):
+        return self.transform(self.end - self.begin)
 
-    if x.shape != input_shape:
-        raise ValueError(f"Expected Input Shape {input_shape}, but got {x.shape}.")
+    def __enter__(self):
+        self.start()
 
-    rows, columns = torch.triu_indices(ndim, ndim)
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        self.stop()
+        if self.verbose:
+            print(self.message())
 
-    return x[:, :, rows, columns].reshape(output_shape)
-
-
-def mare(yhat, y):
-    """
-    Mean Absolute Relative Error
-    @param yhat: predicted value
-    @param y: ground truth
-    """
-    return torch.mean(torch.abs(yhat - y) / torch.abs(y), dim=0)
-
+    def message(self):
+        message = "Execution "
+        if self.name is not None:
+            message += f"of {self.name} "
+        message += f"took {self.duration():.{self.precision}f} {self.unit_name}."
+        return message

@@ -5,8 +5,7 @@ import pathlib as pl
 import shutil
 from deprecated import deprecated
 
-from .device import device
-from .utils import symmetricize, flat_batched_complex_triu
+from . import math
 
 
 class MetricDistanceSet(Dataset):
@@ -34,6 +33,21 @@ class MetricDistanceSet(Dataset):
 
         return z, y
 
+    def get_12(self, item):
+        n = len(self)
+        if abs(item) >= n:
+            raise IndexError(f"Index {item} is out of range for MetricDistanceSet with length {n}")
+        if item < 0:
+            item = n - item
+
+        try:
+            z1 = torch.load(self.path / (str(item) + "_1"))
+            z2 = torch.load(self.path / (str(item) + "_2"))
+        except FileNotFoundError:
+            raise RuntimeError("Could not find z1 and z2. Did you pass `save_12=True` when generating the dataset?")
+
+        return z1, z2
+
     @classmethod
     def load(cls, path):
         if not isinstance(path, pl.Path):
@@ -43,7 +57,7 @@ class MetricDistanceSet(Dataset):
         return cls(path, labels)
 
     @classmethod
-    def generate(cls, n, manifold, path, overwrite=False):
+    def generate(cls, n, manifold, path, overwrite=False, save_12=False):
         if not isinstance(path, pl.Path):
             path = pl.Path(path)
         if not overwrite and path.exists():
@@ -60,10 +74,14 @@ class MetricDistanceSet(Dataset):
             z2 = generate_points(1, ndim=manifold.ndim)
             dist = manifold.dist(z1, z2)
 
-            zz1 = flat_batched_complex_triu(z1)
-            zz2 = flat_batched_complex_triu(z2)
+            zz1 = math.flat_batched_complex_triu(z1)
+            zz2 = math.flat_batched_complex_triu(z2)
 
             z = torch.cat((zz1, zz2), dim=-1).squeeze()
+
+            if save_12:
+                torch.save(z1, path / (str(i) + "_1"))
+                torch.save(z2, path / (str(i) + "_2"))
 
             torch.save(z, path / str(i))
             dists.append(dist.item())
@@ -81,8 +99,8 @@ class SimpleMetricDistanceSet(Dataset):
     """
     def __init__(self, z1, z2, dist, z=None):
         if z is None:
-            zz1 = flat_batched_complex_triu(z1)
-            zz2 = flat_batched_complex_triu(z2)
+            zz1 = math.flat_batched_complex_triu(z1)
+            zz2 = math.flat_batched_complex_triu(z2)
 
             z = torch.cat((zz1, zz2), dim=-1)
 
@@ -142,37 +160,9 @@ class SimpleMetricDistanceSet(Dataset):
 
 
 def generate_points(n, *, ndim):
-    """
-    Generate Points in a Siegel Space of given dimension
-    Points are given by a Standard Normal Distribution
-
-    """
-
-    shape = (n, ndim, ndim)
-
-    real = torch.randn(shape, device=device)
-    imag = torch.randn(shape, device=device)
-
-    # symmetricize
-    real = symmetricize(real)
-    imag = symmetricize(imag)
-
-    # TODO: Confirm with Federico that this is fine
-    #  since the distribution is affected by the dominant diagonal
-    # positive definiteness
-    evs = torch.symeig(imag)
-    e = -evs.eigenvalues[:, 0] + 1
-    e = e.unsqueeze(-1).unsqueeze(-1)
-
-    diag = e * torch.eye(ndim, device=device)
-    imag.add_(diag)
-
+    real = math.make_symmetric_tensor(n, ndim=ndim)
+    imag = math.make_spd_standard(n, ndim=ndim)
     return torch.stack((real, imag), dim=1)
-
-
-
-
-
 
 
 

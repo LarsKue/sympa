@@ -1,46 +1,50 @@
 
 import unittest
 import torch
-from torch.utils.data import DataLoader
 
-from .core import MetricEstimator
+import numpy as np
+
+from sklearn.datasets import make_spd_matrix
+
 from . import data
+from . import math
+from . import utils
 
 from sympa.manifolds import UpperHalfManifold
 
 
-class PointGenerationTest(unittest.TestCase):
+class MathTest(unittest.TestCase):
     def setUp(self) -> None:
         self.ndims = [2, 3, 5, 10, 20]
-        self.n = 100
-
-        self.zs = [
-            data.generate_points(self.n, ndim=ndim)
+        self.n = 1
+        self.reals = [
+            math.make_symmetric_tensor(self.n, ndim=ndim)
+            for ndim in self.ndims
+        ]
+        self.imags = [
+            math.make_spd_standard(self.n, ndim=ndim)
             for ndim in self.ndims
         ]
 
+    def test_shape(self):
+        for i, ndim in enumerate(self.ndims):
+            shape = (self.n, ndim, ndim)
+            self.assertEqual(self.reals[i].shape, shape)
+            self.assertEqual(self.imags[i].shape, shape)
+
     def test_positive_definite(self):
-        for ndim, z in zip(self.ndims, self.zs):
+        for ndim, imag in zip(self.ndims, self.imags):
+            print(imag)
+            self.assertTrue(math.is_positive_definite(imag), msg=f"SPD Matrices of ndim = {ndim} are not positive definite.")
 
-            real, imag = z[:, 0, :, :], z[:, 1, :, :]
+    def test_symmetric_real(self):
+        for ndim, real in zip(self.ndims, self.reals):
+            self.assertTrue(torch.allclose(real.transpose(-2, -1), real), msg=f"Matrices of ndim = {ndim} are not symmetric.")
 
-            # try to compute cholesky decomposition
-            # this works iff the matrix is hermitian positive definite
-            try:
-                torch.linalg.cholesky(imag)
-            except:
-                self.assertTrue(False, msg=f"Matrices of ndim = {ndim} are not positive definite.")
-
-    def test_symmetric(self):
-        for ndim, z in zip(self.ndims, self.zs):
-            self.assertTrue(torch.allclose(z.transpose(-2, -1), z))
-
-    # def test_plot(self):
-    #     for ndim, z in zip(self.ndims, self.zs):
-    #         pts = torch.flatten(z).cpu().tolist()
-    #
-    #         plt.hist(pts, bins=100)
-    #         plt.show()
+    def test_symmetric_imag(self):
+        for ndim, imag in zip(self.ndims, self.imags):
+            print(imag)
+            self.assertTrue(torch.allclose(imag.transpose(-2, -1), imag), msg=f"SPD Matrices of ndim = {ndim} are not symmetric.")
 
 
 class DatasetTest(unittest.TestCase):
@@ -93,6 +97,41 @@ class MiscTest(unittest.TestCase):
         # z1, z2 = z2, z1
 
         print(manifold.dist(z1, z2))
+
+    def test_math(self):
+        n = 100
+        ndim = 3
+        print("Making Skewed...")
+        with utils.Timer("Skewed"):
+            batch_0 = math.make_spd_skewed(n, ndim=ndim)
+        print("Making Tensors...")
+        with utils.Timer("Tensor"):
+            batch_1 = math.make_spd_tensor(n, ndim=ndim)
+        print("Making Standard...")
+        with utils.Timer("Standard"):
+            batch_2 = math.make_spd_standard(n, ndim=ndim)
+
+        mu_0 = torch.mean(batch_0, dim=0)
+        mu_1 = torch.mean(batch_1, dim=0)
+        mu_2 = torch.mean(batch_2, dim=0)
+
+        sig_0 = torch.std(batch_0, dim=0)
+        sig_1 = torch.std(batch_1, dim=0)
+        sig_2 = torch.std(batch_2, dim=0)
+
+        print("skewed:")
+        print(mu_0)
+        print("tensor:")
+        print(mu_1)
+        print("standard:")
+        print(mu_2)
+        print("\n\n")
+        print("skewed:")
+        print(sig_0)
+        print("tensor:")
+        print(sig_1)
+        print("standard:")
+        print(sig_2)
 
 
 if __name__ == "__main__":
