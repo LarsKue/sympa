@@ -7,7 +7,7 @@ import torch
 import unittest
 import sympa.math.csym_math as sm
 import sympa.tests
-from tests.utils import get_random_symmetric_matrices
+from sympa_tests.utils import get_random_symmetric_matrices
 
 
 class TestBasicMath(sympa.tests.TestCase):

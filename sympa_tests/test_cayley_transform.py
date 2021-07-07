@@ -2,7 +2,7 @@ import sympa.tests
 from sympa.math import csym_math as sm
 from sympa.math.cayley_transform import cayley_transform, inverse_cayley_transform
 from sympa.manifolds import BoundedDomainManifold, UpperHalfManifold
-from tests.utils import get_random_symmetric_matrices
+from sympa_tests.utils import get_random_symmetric_matrices
 import unittest
 import torch
 

@@ -4,7 +4,7 @@ from sympa.manifolds import BoundedDomainManifold
 import sympa.math.csym_math as sm
 from sympa.math.cayley_transform import inverse_cayley_transform
 import sympa.tests
-from tests.utils import get_random_symmetric_matrices
+from sympa_tests.utils import get_random_symmetric_matrices
 
 
 class TestBoundedDomainManifold(sympa.tests.TestCase):

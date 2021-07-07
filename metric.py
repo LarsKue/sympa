@@ -8,17 +8,18 @@ from matplotlib import pyplot as plt
 
 import timeit
 
-from metric_estimator import MetricEstimator, MetricDistanceSet
+from metric_estimator import MetricEstimator, DistanceDataset, TransformDataset, VVDDataset
+import metric_estimator.math as math
 
 from sympa.manifolds import UpperHalfManifold
 
 
-def performance(metric_estimator: MetricEstimator, dataset: MetricDistanceSet, n_loops=1000):
+def performance(metric_estimator: MetricEstimator, dataset: DistanceDataset, n_loops=1000):
     manifold = metric_estimator.manifold
 
     z, y = dataset[0]
 
-    z1, z2 = dataset.get_12(0)
+    z1, z2 = math.transform_ibft(z)
 
     def net():
         return metric_estimator.model(z)
@@ -37,8 +38,6 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
     model = nn.Sequential(
         nn.Linear(in_features=2 * ndim * (ndim + 1), out_features=1024),
         nn.ReLU(),
-        nn.Linear(in_features=1024, out_features=1024),
-        nn.ReLU(),
         nn.Linear(in_features=1024, out_features=512),
         nn.ReLU(),
         nn.Linear(in_features=512, out_features=256),
@@ -56,14 +55,33 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
                                                               verbose=True)
     schedulers = [lr_scheduler]
 
+    # VVD Datasets
     if load_data:
         print("Loading Datasets...")
-        train_set = MetricDistanceSet.load(train_path)
-        val_set = MetricDistanceSet.load(val_path)
+        train_set = VVDDataset.load(train_path)
+        val_set = VVDDataset.load(val_path)
     else:
         print("Generating Datasets...")
-        train_set = MetricDistanceSet.generate(n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
-        val_set = MetricDistanceSet.generate(n_val, manifold=manifold, path=val_path, overwrite=overwrite_data, save_12=True)
+        train_set = VVDDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
+        val_set = VVDDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
+
+    # Distance Datasets
+    # if load_data:
+    #     # TODO
+    #     raise NotImplementedError
+    # else:
+    #     print("Generating Datasets...")
+    #     train_set = DistanceDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
+    #     val_set = DistanceDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
+
+    def transform(tensors):
+        z1, z2, vvd = tensors
+        z = math.transform_bft(z1, z2)
+
+        return z, vvd
+
+    train_set = TransformDataset(train_set, transform)
+    val_set = TransformDataset(val_set, transform)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True)
@@ -96,71 +114,66 @@ def main():
     overwrite_data = True
     overwrite_model = True
 
+    ndim = 15
     batch_size = 32
-    n_train = 100 * batch_size
-    n_val = 32 * batch_size
-    n_epochs = 400
+    n_train = 1000 * batch_size
+    n_val = 333 * batch_size
+    n_epochs = 200
 
-    net_times = []
-    exact_times = []
+    metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load_model,
+                                            overwrite_data, batch_size, n_train, n_val)
 
-    ndims = [2, 3, 5, 7, 10, 15, 20, 25, 30, 50, 75, 100]
-    loop_numbers = [10000] * 5 + [1000] * 5 + [100] * 2
+    print("Fitting...")
+    metric_estimator.fit(epochs=n_epochs, verbosity=1)
 
-    for ndim, n_loops in zip(ndims, loop_numbers):
-        print("ndim:", ndim)
-        metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load_model,
-                                                overwrite_data, batch_size, n_train, n_val)
+    print("Saving Model...")
+    metric_estimator.save_model(model_path, overwrite=overwrite_model)
 
-        print("Fitting...")
-        metric_estimator.fit(epochs=n_epochs, verbosity=1)
+    print("Done!")
 
-        # print("Saving Model...")
-        # metric_estimator.save_model(model_path, overwrite=overwrite_model)
-
-        # print("Done!")
-        #
-        # plot_epochs = 1 + np.arange(n_epochs)
-        #
-        # plt.figure(figsize=(10, 9))
-        # plt.plot(plot_epochs[:-1], metric_estimator.train_loss[1:], label="Train")
-        # plt.plot(plot_epochs, metric_estimator.val_loss, label="Validate")
-        #
-        # plt.xlabel("Epoch")
-        # plt.ylabel("Loss")
-        # plt.legend()
-        # plt.savefig("loss_history.png")
-        # plt.show()
-
-        print("Evaluating performance...")
-        net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)
-
-        net_times.append(net)
-        exact_times.append(exact)
-
-        print()
-
-    loop_numbers = np.array(loop_numbers)
-    ndims = np.array(ndims)
-    net_times = 1e3 * np.array(net_times) / loop_numbers
-    exact_times = 1e3 * np.array(exact_times) / loop_numbers
-
-    np.save("ndims", ndims)
-    np.save("net_times", net_times)
-    np.save("exact_times", exact_times)
+    plot_epochs = 1 + np.arange(n_epochs)
 
     plt.figure(figsize=(10, 9))
-    plt.plot(ndims, exact_times, label="Exact Algorithm", marker="o")
-    plt.plot(ndims, net_times, label="Network Approximation", marker="o")
+    plt.plot(plot_epochs[:-1], metric_estimator.train_loss[1:], label="Train")
+    plt.plot(plot_epochs, metric_estimator.val_loss, label="Validate")
+    plt.yscale("log")
 
-    plt.title("Runtime per Call by Dimension")
-    plt.xlabel("Dimension")
-    plt.ylabel("$t / ms$")
-
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
     plt.legend()
-    plt.savefig("runtimes.pdf")
-    plt.savefig("runtimes.png")
+    plt.savefig("loss_history.png")
     plt.show()
+
+    # print("Evaluating performance...")
+    # net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)
+
+    # net_times.append(net)
+    # exact_times.append(exact)
+
+
+    # Old performance evaluation code
+
+    # loop_numbers = np.array(loop_numbers)
+    # ndims = np.array(ndims)
+    # net_times = 1e3 * np.array(net_times) / loop_numbers
+    # exact_times = 1e3 * np.array(exact_times) / loop_numbers
+    #
+    # np.save("ndims", ndims)
+    # np.save("net_times", net_times)
+    # np.save("exact_times", exact_times)
+    #
+    # plt.figure(figsize=(10, 9))
+    # plt.plot(ndims, exact_times, label="Exact Algorithm", marker="o")
+    # plt.plot(ndims, net_times, label="Network Approximation", marker="o")
+    #
+    # plt.title("Runtime per Call by Dimension")
+    # plt.xlabel("Dimension")
+    # plt.ylabel("$t / ms$")
+    #
+    # plt.legend()
+    # plt.savefig("runtimes.pdf")
+    # plt.savefig("runtimes.png")
+    # plt.show()
 
 
 def plots():
@@ -192,5 +205,5 @@ def plots():
 
 
 if __name__ == "__main__":
-    # main()
-    plots()
+    main()
+    # plots()

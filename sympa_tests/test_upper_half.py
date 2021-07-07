@@ -3,7 +3,7 @@ import unittest
 from sympa.manifolds import UpperHalfManifold
 import sympa.math.csym_math as sm
 import sympa.tests
-from tests.utils import get_random_symmetric_matrices
+from sympa_tests.utils import get_random_symmetric_matrices
 
 
 class TestUpperHalfManifold(sympa.tests.TestCase):

@@ -3,11 +3,10 @@ from .save import ModelSaveMixin
 
 
 # TODO:
-#  - Create Siegel Metric
-#  - Use Metric to create TS (standard normal dist scaled to unit box)
-#  - Create model layers
-#  - Fit model to available data
-#  - cross validation
+#  - vvd angle dataset
+#  - predict angle of vvd
+#  - predict vvd (see email)
+#  - hyper parameter optimization
 
 
 class MetricEstimator(ModelFitMixin, ModelSaveMixin):

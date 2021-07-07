@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from .device import device
 
@@ -35,8 +36,10 @@ def symmetricize(x, copy=True):
     return torch.matmul(x.transpose(-2, -1), x)
 
 
-def flat_batched_complex_triu(x):
+def bft(x):
     """
+    Batched and Flattened Upper Triangular Part of Complex Matrices
+
     Takes a batch of complex (symmetric) matrices
     x of shape (batch_size, 2, ndim, ndim)
     and returns the flattened upper triangular part
@@ -46,7 +49,7 @@ def flat_batched_complex_triu(x):
     ndim = x.shape[-1]
 
     input_shape = (batch_size, 2, ndim, ndim)
-    output_shape = (batch_size, -1)
+    output_shape = (batch_size, ndim * (ndim + 1))
 
     if x.shape != input_shape:
         raise ValueError(f"Expected Input Shape {input_shape}, but got {x.shape}.")
@@ -54,6 +57,57 @@ def flat_batched_complex_triu(x):
     rows, columns = torch.triu_indices(ndim, ndim)
 
     return x[:, :, rows, columns].reshape(output_shape)
+
+
+def ibft(x):
+    """
+    Inverse to :func:`~bft`
+    """
+    batch_size = x.shape[0]
+    s = np.sqrt(4 * x.shape[1] + 1)
+    ndim = int(0.5 * (-1 + s))
+
+    input_shape = (batch_size, ndim * (ndim + 1))
+
+    if x.shape != input_shape:
+        raise ValueError(f"Expected Input Shape {input_shape}, but got {x.shape}")
+
+    nu = int(ndim * (ndim + 1) / 2)
+    real_u, imag_u = x.split(nu, dim=1)
+
+    shape = (batch_size, ndim, ndim)
+
+    real = torch.zeros(shape, device=x.device)
+    imag = torch.zeros(shape, device=x.device)
+
+    rows, columns = torch.triu_indices(ndim, ndim)
+
+    real[:, rows, columns] = real_u
+    imag[:, rows, columns] = imag_u
+
+    real = symmetricize(real, copy=True)
+    imag = symmetricize(imag, copy=True)
+
+    return torch.stack((real, imag), dim=1)
+
+
+def transform_bft(z1, z2):
+    zz1 = bft(z1)
+    zz2 = bft(z2)
+
+    z = torch.cat((zz1, zz2), dim=-1).squeeze()
+
+    return z
+
+
+def transform_ibft(z):
+    n = z.shape[-1] // 2
+    zz1, zz2 = z.split(n, dim=-1)
+
+    z1 = ibft(zz1)
+    z2 = ibft(zz2)
+
+    return z1, z2
 
 
 def mare(yhat, y):
@@ -67,7 +121,7 @@ def mare(yhat, y):
 
 def make_symmetric_tensor(n, *, ndim):
     shape = (n, ndim, ndim)
-    t = torch.randn(shape, device=device)
+    t = torch.rand(shape, device=device)
 
     return symmetricize(t, copy=False)
 
@@ -110,6 +164,7 @@ def make_spd_standard(n, *, ndim):
     """
     Generate batched random Symmetric Positive Definite (SPD) matrices
     as described by Prof. Köthe as the standard algorithm
+    :return: SPD tensor of shape (n, ndim, ndim)
     """
     shape = (n, ndim, ndim)
 
@@ -121,7 +176,7 @@ def make_spd_standard(n, *, ndim):
     qt = torch.transpose(q, -2, -1)
 
     # sample positive eigenvalues from uniform distribution
-    eigvals = torch.abs(torch.randn(n, ndim, device=device))
+    eigvals = torch.abs(torch.rand(n, ndim, device=device))
 
     # embed eigenvalues into diagonal matrices L
     l = torch.diag_embed(eigvals)

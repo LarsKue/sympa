@@ -39,14 +39,19 @@ class SiegelManifold(Manifold, ABC):
         self.metric = Metric.get(metric, self.dims)
 
     def dist(self, z1: torch.Tensor, z2: torch.Tensor, *, keepdim=False) -> torch.Tensor:
+        v = self.vvd(z1, z2)
+        res = self.metric.compute_metric(v)
+        return res
+
+    def vvd(self, z1: torch.Tensor, z2: torch.Tensor) -> torch.Tensor:
         """
-        Calculates the distance for the Upper Half Space Manifold (UHSM)
+        Calculates the vector-valued distance for the Upper Half Space Manifold (UHSM)
         It is implemented here since the way to calculate distances in the Bounded Domain Manifold
         requires mapping the points to the UHSM, and then applying this formula.
 
-        :param z1, z2: b x 2 x n x n: elements in the UHSM
-        :param keepdim:
-        :return: distance between x and y in the UHSM
+        :param z1: b x 2 x n x n element in the UHSM
+        :param z2: see z1
+        :return: vector valued distance between z1 and z2 in the UHSM
         """
         # with Z1 = X + iY, define Z3 = sqrt(Y)^-1 (Z2 - X) sqrt(Y)^-1
         real_z1, imag_z1 = sm.real(z1), sm.imag(z1)
@@ -68,8 +73,8 @@ class SiegelManifold(Manifold, ABC):
         # vi = (1 + di) / (1 - di)
         v = (1 + eigvalues) / (1 - eigvalues).clamp(min=eps)
         v = torch.log(v)
-        res = self.metric.compute_metric(v)
-        return res
+        return v
+
 
     def retr(self, x: torch.Tensor, u: torch.Tensor) -> torch.Tensor:
         """
