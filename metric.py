@@ -53,35 +53,38 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
     loss = torch.nn.MSELoss()
     lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=30, factor=0.5, cooldown=10,
                                                               verbose=True)
-    schedulers = [lr_scheduler]
+    # schedulers = [lr_scheduler]
+    schedulers = []
 
     # VVD Datasets
-    if load_data:
-        print("Loading Datasets...")
-        train_set = VVDDataset.load(train_path)
-        val_set = VVDDataset.load(val_path)
-    else:
-        print("Generating Datasets...")
-        train_set = VVDDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
-        val_set = VVDDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
-
-    # Distance Datasets
     # if load_data:
-    #     # TODO
-    #     raise NotImplementedError
+    #     print("Loading Datasets...")
+    #     train_set = VVDDataset.load(train_path)
+    #     val_set = VVDDataset.load(val_path)
     # else:
     #     print("Generating Datasets...")
-    #     train_set = DistanceDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
-    #     val_set = DistanceDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
+    #     train_set = VVDDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
+    #     val_set = VVDDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
+
+    # Distance Datasets
+    if load_data:
+        # TODO
+        raise NotImplementedError
+    else:
+        print("Generating Datasets...")
+        train_set = DistanceDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
+        val_set = DistanceDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
 
     def transform(tensors):
-        z1, z2, vvd = tensors
+        z1, z2 = tensors
+
         z = math.transform_bft(z1, z2)
 
-        return z, vvd
+        return z
 
-    train_set = TransformDataset(train_set, transform)
-    val_set = TransformDataset(val_set, transform)
+    print("Applying transformation...")
+    train_set.datasets[0].transform(how=transform, new_attribute_names=["z"])
+    val_set.datasets[0].transform(how=transform, new_attribute_names=["z"])
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True)
@@ -104,6 +107,24 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
     return metric_estimator
 
 
+def print_samples(n, model, dataset, loss):
+    l = len(dataset)
+    temp = model.training
+    model.train(mode=False)
+    for i in range(n):
+        idx = np.random.randint(0, l)
+        x, y = dataset[idx]
+        yhat = model(x)
+        item_loss = loss(yhat, y)
+
+        print(f"Predicted: {yhat}")
+        print(f"Actual:    {y}")
+        print(f"Loss:      {item_loss}")
+        print()
+
+    model.train(mode=temp)
+
+
 def main():
 
     model_path = "me_model"
@@ -114,11 +135,11 @@ def main():
     overwrite_data = True
     overwrite_model = True
 
-    ndim = 15
+    ndim = 5
     batch_size = 32
-    n_train = 1000 * batch_size
-    n_val = 333 * batch_size
-    n_epochs = 200
+    n_train = 256 * batch_size
+    n_val = 32 * batch_size
+    n_epochs = 1024
 
     metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load_model,
                                             overwrite_data, batch_size, n_train, n_val)
@@ -143,6 +164,8 @@ def main():
     plt.legend()
     plt.savefig("loss_history.png")
     plt.show()
+
+    print_samples(5, metric_estimator.model, metric_estimator.val_loader.dataset, loss=math.mare)
 
     # print("Evaluating performance...")
     # net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)

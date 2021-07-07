@@ -30,4 +30,6 @@ def generate_points(n, *, ndim):
     real = math.make_symmetric_tensor(n, ndim=ndim)
     imag = math.make_spd_standard(n, ndim=ndim)
 
-    return torch.stack((real, imag), dim=1)
+    z = torch.stack((real, imag), dim=1)
+
+    return math.scale_to_unit_box(z)

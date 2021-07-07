@@ -121,7 +121,7 @@ def mare(yhat, y):
 
 def make_symmetric_tensor(n, *, ndim):
     shape = (n, ndim, ndim)
-    t = torch.rand(shape, device=device)
+    t = torch.randn(shape, device=device)
 
     return symmetricize(t, copy=False)
 
@@ -175,8 +175,8 @@ def make_spd_standard(n, *, ndim):
     q, r = torch.linalg.qr(g)
     qt = torch.transpose(q, -2, -1)
 
-    # sample positive eigenvalues from uniform distribution
-    eigvals = torch.abs(torch.rand(n, ndim, device=device))
+    # sample positive eigenvalues from some distribution
+    eigvals = torch.abs(torch.randn(n, ndim, device=device))
 
     # embed eigenvalues into diagonal matrices L
     l = torch.diag_embed(eigvals)
@@ -186,3 +186,28 @@ def make_spd_standard(n, *, ndim):
     s = torch.matmul(torch.matmul(q, l), qt)
 
     return s
+
+
+def scale_to_unit_box(z, return_factors=False):
+    """
+    Scale a batch of Siegel points to the Unit Box [0, 1]
+    @param z: Tensor of shape (batch_size, 2, ndim, ndim)
+    @param return_factors: If true, also returns the scaling factors that were used
+    @return: Tensor of shape (batch_size, 2, ndim, ndim) with all entries in [0, 1]
+    """
+    # 2nd dimension of matrix
+    m, _ = torch.max(z, dim=-1)
+    # first dimension of matrix
+    m, _ = torch.max(m, dim=-1)
+    # max in real vs imag
+    m, _ = torch.max(m, dim=-1)
+
+    if return_factors:
+        return z / m, m
+
+    return z / m
+
+
+def scale_to(z, lo, hi):
+    z = scale_to_unit_box(z)
+    return lo + hi * z

@@ -1,4 +1,3 @@
-
 import torch
 from torch.utils.data import Dataset
 import pickle
@@ -11,7 +10,7 @@ class FileDataset(Dataset):
     in a file named varname_index
     """
 
-    def __init__(self, path, size, attribute_names):
+    def __init__(self, path, size: int, attribute_names: list[str]):
         self.path = path
         self.size = size
         self.attribute_names = attribute_names
@@ -44,3 +43,26 @@ class FileDataset(Dataset):
     @staticmethod
     def load(path):
         return pickle.load(path / "meta")
+
+    def transform(self, how, new_attribute_names: list[str]):
+        """
+        Apply expensive transformations once across the dataset
+        @param how: the transformation,
+                    taking the current output tensors as arguments,
+                    returning the new output tensors
+        @param new_attribute_names:
+        @return:
+        """
+        for i, tensors in enumerate(self):
+            tensors = how(tensors)
+
+            if torch.is_tensor(tensors):
+                # just a single tensor
+                name = new_attribute_names[0]
+                torch.save(tensors, self.path / (name + "_" + str(i)))
+            else:
+                # multiple tensors
+                for name, t in zip(new_attribute_names, tensors):
+                    torch.save(t, self.path / (name + "_" + str(i)))
+
+        self.attribute_names = new_attribute_names

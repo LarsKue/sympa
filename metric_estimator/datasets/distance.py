@@ -8,7 +8,7 @@ from ..device import device
 
 
 class DistanceDataset(StackedDataset):
-    def __init__(self, points: SiegelPointDataset, distances: TensorDataset):
+    def __init__(self, points, distances: TensorDataset):
         super(DistanceDataset, self).__init__([points, distances])
 
     @classmethod
