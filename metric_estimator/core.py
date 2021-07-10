@@ -3,9 +3,12 @@ from .save import ModelSaveMixin
 
 
 # TODO:
+#  - Improve Siegel Point Sampling by rejecting outliers
+#    (this makes the dataset more dense in relevant parts)
+#  - Sample data points uniformly instead of normally
+#  - Greatly increase training set size (~factor 10)
 #  - vvd angle dataset
 #  - predict angle of vvd
-#  - predict vvd (see email)
 #  - hyper parameter optimization
 
 

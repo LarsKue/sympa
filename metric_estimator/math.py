@@ -110,13 +110,14 @@ def transform_ibft(z):
     return z1, z2
 
 
-def mare(yhat, y):
+def mare(yhat, y, dim=0):
     """
     Mean Absolute Relative Error
-    @param yhat: predicted value
-    @param y: ground truth
+    @param yhat: Predicted value
+    @param y: Ground truth
+    @param dim: Dimension to draw the loss over
     """
-    return torch.mean(torch.abs(yhat - y) / torch.abs(y), dim=0)
+    return torch.mean(torch.abs(yhat - y) / torch.abs(y), dim=dim)
 
 
 def make_symmetric_tensor(n, *, ndim):
@@ -211,3 +212,8 @@ def scale_to_unit_box(z, return_factors=False):
 def scale_to(z, lo, hi):
     z = scale_to_unit_box(z)
     return lo + hi * z
+
+
+def is_sorted(y, dim=-1):
+    sy, _ = torch.sort(y, dim=dim)
+    return torch.allclose(y, sy)

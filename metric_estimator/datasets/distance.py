@@ -17,7 +17,7 @@ class DistanceDataset(StackedDataset):
 
         print(f"Calculating {size} distances...")
         distances = torch.Tensor([
-            manifold.dist(z1, z2) for z1, z2 in points
+            manifold.dist(z1, z2) for z1, z2, _ in points
         ]).to(device)
 
         distances = distances.unsqueeze(-1)

@@ -2,6 +2,8 @@ import torch
 from torch.utils.data import Dataset
 import pickle
 
+from .io import prepare_path
+
 
 class FileDataset(Dataset):
     """
@@ -11,7 +13,7 @@ class FileDataset(Dataset):
     """
 
     def __init__(self, path, size: int, attribute_names: list[str]):
-        self.path = path
+        self.path = prepare_path(path)
         self.size = size
         self.attribute_names = attribute_names
 
@@ -38,11 +40,14 @@ class FileDataset(Dataset):
         return index
 
     def save(self):
-        pickle.dump(self, self.path / "meta")
+        with open(self.path / "meta", "wb+") as f:
+            pickle.dump(self, f)
 
     @staticmethod
     def load(path):
-        return pickle.load(path / "meta")
+        path = prepare_path(path)
+        with open(path / "meta", "rb") as f:
+            return pickle.load(f)
 
     def transform(self, how, new_attribute_names: list[str]):
         """
