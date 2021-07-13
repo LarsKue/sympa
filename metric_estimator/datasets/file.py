@@ -1,8 +1,9 @@
 import torch
 from torch.utils.data import Dataset
 import pickle
+import copy
 
-from .io import prepare_path
+from .. import io
 
 
 class FileDataset(Dataset):
@@ -13,7 +14,7 @@ class FileDataset(Dataset):
     """
 
     def __init__(self, path, size: int, attribute_names: list[str]):
-        self.path = prepare_path(path)
+        self.path = io.prepare_path(path)
         self.size = size
         self.attribute_names = attribute_names
 
@@ -39,35 +40,53 @@ class FileDataset(Dataset):
 
         return index
 
+    def with_size(self, new_size):
+        """
+        Truncate the dataset
+        @param new_size: Size of the truncated set
+        @return: The truncated dataset
+        """
+        if new_size > self.size:
+            raise ValueError(f"Cannot create {self.__class__} with size {new_size} from size {self.size}.")
+
+        instance = copy.copy(self)
+
+        instance.size = new_size
+
+        return instance
+
+    def transform(self, how):
+        """
+        Apply expensive transformations once across the dataset
+        Number and order of tensors must match current dataset
+        If you need a different transformation, construct a new dataset
+        @param how: the transformation,
+                    taking the current output tensors as arguments,
+                    returning a tuple of new output tensors
+        @return: None
+        """
+        for i, tensors in enumerate(self):
+            tensors = how(tensors)
+
+            for name, tensor in zip(self.attribute_names, tensors):
+                torch.save(tensor, self.path / (name + "_" + str(i)))
+
     def save(self):
+        """
+        Save Metadata to the dataset directory
+        @return: None
+        """
         with open(self.path / "meta", "wb+") as f:
             pickle.dump(self, f)
 
     @staticmethod
     def load(path):
-        path = prepare_path(path)
+        """
+        Load Metadata from the dataset directory
+        @return: The dataset
+        """
+        path = io.prepare_path(path)
         with open(path / "meta", "rb") as f:
             return pickle.load(f)
 
-    def transform(self, how, new_attribute_names: list[str]):
-        """
-        Apply expensive transformations once across the dataset
-        @param how: the transformation,
-                    taking the current output tensors as arguments,
-                    returning the new output tensors
-        @param new_attribute_names:
-        @return:
-        """
-        for i, tensors in enumerate(self):
-            tensors = how(tensors)
 
-            if torch.is_tensor(tensors):
-                # just a single tensor
-                name = new_attribute_names[0]
-                torch.save(tensors, self.path / (name + "_" + str(i)))
-            else:
-                # multiple tensors
-                for name, t in zip(new_attribute_names, tensors):
-                    torch.save(t, self.path / (name + "_" + str(i)))
-
-        self.attribute_names = new_attribute_names

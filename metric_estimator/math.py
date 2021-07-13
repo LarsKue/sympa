@@ -110,16 +110,6 @@ def transform_ibft(z):
     return z1, z2
 
 
-def mare(yhat, y, dim=0):
-    """
-    Mean Absolute Relative Error
-    @param yhat: Predicted value
-    @param y: Ground truth
-    @param dim: Dimension to draw the loss over
-    """
-    return torch.mean(torch.abs(yhat - y) / torch.abs(y), dim=dim)
-
-
 def make_symmetric_tensor(n, *, ndim):
     shape = (n, ndim, ndim)
     t = torch.randn(shape, device=device)

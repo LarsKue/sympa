@@ -3,13 +3,13 @@ import torch
 
 from .points import SiegelPointDataset
 from .file import FileDataset
-from .io import prepare_path
+from .. import io
 
 
 class VVDDataset(FileDataset):
     @classmethod
     def generate(cls, *, size, manifold, path, overwrite=False):
-        path = prepare_path(path)
+        path = io.prepare_path(path)
         points = SiegelPointDataset.generate(size=size, ndim=manifold.ndim, path=path, overwrite=overwrite)
 
         print(f"Calculating {size} distances...")

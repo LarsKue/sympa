@@ -10,6 +10,7 @@ import timeit
 
 from metric_estimator import MetricEstimator, DistanceDataset, TransformDataset, VVDDataset, ModelEvaluation
 import metric_estimator.math as math
+import metric_estimator.losses as losses
 
 from sympa.manifolds import UpperHalfManifold
 
@@ -33,30 +34,16 @@ def performance(metric_estimator: MetricEstimator, dataset: DistanceDataset, n_l
     return net_result, exact_result
 
 
-def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load_model, overwrite_data, batch_size, n_train, n_val):
+def get_metric_estimator(ndim, model_path, train_path, val_path, loss_path, load_data, load_model, overwrite_data, batch_size, n_train, n_val):
     manifold = UpperHalfManifold(ndim=ndim)
     model = nn.Sequential(
-        nn.Linear(in_features=2 * ndim * (ndim + 1), out_features=2048),
-        nn.PReLU(),
-        nn.Linear(in_features=2048, out_features=2048),
-        nn.PReLU(),
-        nn.Linear(in_features=2048, out_features=2048),
-        nn.PReLU(),
-        nn.Linear(in_features=2048, out_features=1024),
-        nn.PReLU(),
-        nn.Linear(in_features=1024, out_features=1024),
+        nn.Linear(in_features=2 * ndim * (ndim + 1), out_features=1024),
         nn.PReLU(),
         nn.Linear(in_features=1024, out_features=1024),
         nn.PReLU(),
         nn.Linear(in_features=1024, out_features=1024),
         nn.PReLU(),
         nn.Linear(in_features=1024, out_features=512),
-        nn.PReLU(),
-        nn.Linear(in_features=512, out_features=512),
-        nn.PReLU(),
-        nn.Linear(in_features=512, out_features=512),
-        nn.PReLU(),
-        nn.Linear(in_features=512, out_features=512),
         nn.PReLU(),
         nn.Linear(in_features=512, out_features=ndim),
     )
@@ -101,6 +88,9 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
     #     train_set = DistanceDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
     #     val_set = DistanceDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
 
+    train_set = train_set.with_size(n_train)
+    val_set = val_set.with_size(n_val)
+
     def transform(tensors):
         # we want only the bft and the vvd
         z1, z2, z, vvd = tensors
@@ -127,6 +117,9 @@ def get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load
         batch_shape
     )
 
+    if load_model:
+        metric_estimator.history.load(loss_path)
+
     return metric_estimator
 
 
@@ -152,33 +145,36 @@ def main():
     model_path = "me_model"
     train_path = "ds_train"
     val_path = "ds_val"
+    loss_path = "loss_history"
     load_data = True
-    load_model = False
+    load_model = True
     overwrite_data = False
     overwrite_model = True
 
     ndim = 15
     batch_size = 32
-    n_train = 256 * batch_size
-    n_val = 64 * batch_size
-    n_epochs = 200
+    n_train = 512 * batch_size
+    n_val = 128 * batch_size
+    # TODO: another 150ish, then send email
+    n_epochs = 150
 
-    metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, load_data, load_model,
+    metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, loss_path, load_data, load_model,
                                             overwrite_data, batch_size, n_train, n_val)
 
     print("Fitting...")
     metric_estimator.fit(epochs=n_epochs, verbosity=2)
 
-    print("Saving Model...")
+    print("Saving...")
     metric_estimator.save_model(model_path, overwrite=overwrite_model)
+    metric_estimator.save_loss(loss_path)
 
     print("Done!")
 
-    plot_epochs = 1 + np.arange(n_epochs)
+    plot_epochs = 1 + np.arange(len(metric_estimator.history))
 
     plt.figure(figsize=(10, 9))
-    plt.plot(plot_epochs[:-1], metric_estimator.train_loss[1:], label="Train")
-    plt.plot(plot_epochs, metric_estimator.val_loss, label="Validate")
+    plt.plot(plot_epochs[:-1], metric_estimator.history.train_loss[1:], label="Train")
+    plt.plot(plot_epochs, metric_estimator.history.val_loss, label="Validate")
     plt.yscale("log")
 
     plt.xlabel("Epoch")
@@ -189,14 +185,27 @@ def main():
 
     val_set = metric_estimator.val_loader.dataset
 
-    sorted_samples(5, metric_estimator.model, val_set, loss=math.mare)
+    loss = losses.L2Loss()
+
+    model = metric_estimator.model
+
+    sorted_samples(5, model, val_set, loss=loss)
 
     n_sorted = 0
-    for i, (z, vvd) in enumerate(val_set):
-        if math.is_sorted(vvd):
-            n_sorted += 1
+    total_loss = 0
+    with ModelEvaluation(model):
+        for i, (z, vvd) in enumerate(val_set):
+
+            predicted = model(z)
+            l = loss(predicted, vvd)
+
+            if math.is_sorted(predicted):
+                n_sorted += 1
+
+            total_loss += l
 
     print(f"Sorted: {100.0 * n_sorted / len(val_set):.2f}%")
+    print(f"Mean Loss: {total_loss / len(val_set)}")
 
     # print("Evaluating performance...")
     # net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)

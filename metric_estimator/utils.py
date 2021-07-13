@@ -1,5 +1,5 @@
 
-from time import perf_counter
+import time
 
 
 class Timer:
@@ -13,10 +13,10 @@ class Timer:
         self.verbose = verbose
 
     def start(self):
-        self.begin = perf_counter()
+        self.begin = time.perf_counter()
 
     def stop(self):
-        self.end = perf_counter()
+        self.end = time.perf_counter()
 
     def duration(self):
         return self.transform(self.end - self.begin)

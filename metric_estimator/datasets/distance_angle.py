@@ -1,9 +1,9 @@
 
 from torch.utils.data import TensorDataset
 
-from .io import prepare_path
 from .stacked import StackedDataset
 from .distance import DistanceDataset
+from .. import io
 
 
 class DistanceAngleDataset(StackedDataset):
@@ -12,7 +12,8 @@ class DistanceAngleDataset(StackedDataset):
 
     @classmethod
     def generate(cls, *, size, manifold, path, overwrite=False):
-        path = prepare_path(path, overwrite)
+        path = io.prepare_path(path)
+        io.handle_overwrite(path, overwrite)
         distances = DistanceDataset.generate(size=size, manifold=manifold, path=path, overwrite=overwrite)
 
         angles = ...

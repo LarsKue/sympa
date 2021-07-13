@@ -4,6 +4,7 @@ import numpy as np
 
 from .model import ModelMixin
 from .device import device
+from .history import LossHistory
 
 
 class ModelFitMixin(ModelMixin):
@@ -19,8 +20,7 @@ class ModelFitMixin(ModelMixin):
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.batch_shape = batch_shape
-        self.train_loss = []
-        self.val_loss = []
+        self.history = LossHistory()
 
     def fit(self, epochs, validate=True, verbosity=0):
         """
@@ -31,13 +31,13 @@ class ModelFitMixin(ModelMixin):
         """
         for epoch in range(epochs):
             train_loss = self.step_train()
-            self.train_loss.append(train_loss)
 
             if validate:
                 val_loss = self.step_val()
-                self.val_loss.append(val_loss)
             else:
                 val_loss = None
+
+            self.history.step(train_loss, val_loss)
 
             for s in self.schedulers:
                 s.step(val_loss)
@@ -98,3 +98,6 @@ class ModelFitMixin(ModelMixin):
 
         self.model.train(mode=temp)
         return np.mean(batch_losses)
+
+    def save_loss(self, path):
+        self.history.save(path)
