@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from deprecated import deprecated
 
 from .device import device
 
@@ -110,6 +111,8 @@ def transform_ibft(z):
     return z1, z2
 
 
+@deprecated(version="0.0.2", reason="The resulting distribution is unclear. "
+                                    "Use `make_symmetric_normal` or `make_symmetric_uniform` instead.")
 def make_symmetric_tensor(n, *, ndim):
     shape = (n, ndim, ndim)
     t = torch.randn(shape, device=device)
@@ -117,6 +120,22 @@ def make_symmetric_tensor(n, *, ndim):
     return symmetricize(t, copy=False)
 
 
+def make_symmetric_normal(n, *, ndim):
+    shape = (n, ndim, ndim)
+    t = torch.randn(shape, device=device)
+
+    return symmetricize(t, copy=True)
+
+
+def make_symmetric_uniform(n, *, ndim):
+    shape = (n, ndim, ndim)
+    t = torch.rand(shape, device=device)
+
+    return symmetricize(t, copy=True)
+
+
+@deprecated(version="0.0.2", reason="The resulting distribution is skewed. "
+                                    "Use `make_spd_normal` or `make_spd_uniform` instead.")
 def make_spd_skewed(n, *, ndim):
     t = make_symmetric_tensor(n, ndim=ndim)
 
@@ -130,6 +149,8 @@ def make_spd_skewed(n, *, ndim):
     return t
 
 
+@deprecated(version="0.0.2", reason="The resulting distribution is unclear. "
+                                    "Use `make_spd_normal` or `make_spd_uniform` instead.")
 def make_spd_tensor(n, *, ndim):
     """
     Generate batched random Symmetric Positive Definite (SPD) matrices
@@ -138,7 +159,7 @@ def make_spd_tensor(n, *, ndim):
     :return: SPD tensor of shape (n, ndim, ndim)
     """
     # generate random symmetric matrix
-    t = make_symmetric_tensor(n, ndim=ndim)
+    t = make_symmetric_normal(n, ndim=ndim)
 
     # singular value decomposition
     u, _, vh = torch.linalg.svd(t)
@@ -151,26 +172,50 @@ def make_spd_tensor(n, *, ndim):
     return t
 
 
-def make_spd_standard(n, *, ndim):
+def make_spd_normal(n, *, ndim):
     """
-    Generate batched random Symmetric Positive Definite (SPD) matrices
-    as described by Prof. Köthe as the standard algorithm
-    :return: SPD tensor of shape (n, ndim, ndim)
+    Make SPD Matrices using a Normal Distribution
     """
     shape = (n, ndim, ndim)
 
     # sample random matrix
     g = torch.randn(shape, device=device)
 
-    # compute QR decomposition
+    # sample positive eigenvalues from positive normal
+    eigvals = torch.abs(torch.randn(n, ndim, device=device))
+
+    return _make_spd(g, eigvals)
+
+
+def make_spd_uniform(n, *, ndim):
+    """
+    Make SPD Matrices using a Uniform Distribution
+    """
+    shape = (n, ndim, ndim)
+
+    # sample uniform matrix
+    g = torch.rand(shape, device=device)
+
+    # sample positive eigenvalues from uniform distribution
+    eigvals = torch.rand(n, ndim, device=device)
+
+    return _make_spd(g, eigvals)
+
+
+def _make_spd(g, eigenvalues):
+    """
+    Generate batched Symmetric Positive Definite (SPD) Matrices
+    as described by Prof. Köthe as the standard algorithm
+    @param g: Randomly Sampled Matrix
+    @param eigenvalues: Randomly Sampled Eigenvalues
+    @return: SPD Matrices in shape (batch_size, ndim, ndim)
+    """
+    # compute QR decomposition of matrix G
     q, r = torch.linalg.qr(g)
     qt = torch.transpose(q, -2, -1)
 
-    # sample positive eigenvalues from some distribution
-    eigvals = torch.abs(torch.randn(n, ndim, device=device))
-
     # embed eigenvalues into diagonal matrices L
-    l = torch.diag_embed(eigvals)
+    l = torch.diag_embed(eigenvalues)
 
     # reconstruct from eigen-decomposition S = U * L * U^T
     # where U = Q

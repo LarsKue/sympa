@@ -146,17 +146,16 @@ def main():
     train_path = "ds_train"
     val_path = "ds_val"
     loss_path = "loss_history"
-    load_data = True
-    load_model = True
-    overwrite_data = False
+    load_data = False
+    load_model = False
+    overwrite_data = True
     overwrite_model = True
 
     ndim = 15
     batch_size = 32
     n_train = 512 * batch_size
     n_val = 128 * batch_size
-    # TODO: another 150ish, then send email
-    n_epochs = 150
+    n_epochs = 200
 
     metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, loss_path, load_data, load_model,
                                             overwrite_data, batch_size, n_train, n_val)
@@ -170,19 +169,6 @@ def main():
 
     print("Done!")
 
-    plot_epochs = 1 + np.arange(len(metric_estimator.history))
-
-    plt.figure(figsize=(10, 9))
-    plt.plot(plot_epochs[:-1], metric_estimator.history.train_loss[1:], label="Train")
-    plt.plot(plot_epochs, metric_estimator.history.val_loss, label="Validate")
-    plt.yscale("log")
-
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.savefig("loss_history.png")
-    plt.show()
-
     val_set = metric_estimator.val_loader.dataset
 
     loss = losses.L2Loss()
@@ -192,7 +178,7 @@ def main():
     sorted_samples(5, model, val_set, loss=loss)
 
     n_sorted = 0
-    total_loss = 0
+    total_l2 = 0
     with ModelEvaluation(model):
         for i, (z, vvd) in enumerate(val_set):
 
@@ -202,10 +188,37 @@ def main():
             if math.is_sorted(predicted):
                 n_sorted += 1
 
-            total_loss += l
+            total_l2 += l
+
+    mean_l2 = total_l2 / len(val_set)
 
     print(f"Sorted: {100.0 * n_sorted / len(val_set):.2f}%")
-    print(f"Mean Loss: {total_loss / len(val_set)}")
+    print(f"Mean L2 Loss: {mean_l2}")
+
+    plot_epochs = 1 + np.arange(len(metric_estimator.history))
+
+    plt.figure(figsize=(10, 9))
+    plt.plot(plot_epochs[:-1], metric_estimator.history.train_loss[1:], label="Train")
+    plt.plot(plot_epochs, metric_estimator.history.val_loss, label="Validate")
+
+    min_mse = min(metric_estimator.history.val_loss)
+    props = dict(boxstyle="round", facecolor="lightblue", edgecolor="black", alpha=0.5)
+    text = f"Minimal MSE Loss: {min_mse:.4f}\n" \
+           f"Mean L2 Loss:     {mean_l2:.4f}"
+    fontdict = dict(fontname="monospace", fontsize=14)
+
+    plt.text(0.5, 0.75, text, fontdict=fontdict, transform=plt.gca().transAxes, bbox=props)
+
+    plt.yscale("log")
+
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend(loc="upper right")
+    plt.title("Loss History")
+    plt.savefig("loss_history.png")
+    plt.show()
+
+
 
     # print("Evaluating performance...")
     # net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)

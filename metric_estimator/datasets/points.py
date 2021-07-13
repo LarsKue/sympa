@@ -52,7 +52,7 @@ class SiegelPointDataset(FileDataset):
 
 
 def generate_points(n, *, ndim):
-    real = math.make_symmetric_tensor(n, ndim=ndim)
-    imag = math.make_spd_standard(n, ndim=ndim)
+    real = math.make_symmetric_uniform(n, ndim=ndim)
+    imag = math.make_spd_uniform(n, ndim=ndim)
 
     return torch.stack((real, imag), dim=1)
