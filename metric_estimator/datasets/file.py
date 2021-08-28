@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 import pickle
 import copy
 
-from .. import io
+from ..legacy import io
 
 
 class FileDataset(Dataset):

@@ -3,7 +3,7 @@ from torch.utils.data import TensorDataset
 
 from .stacked import StackedDataset
 from .distance import DistanceDataset
-from .. import io
+from ..legacy import io
 
 
 class DistanceAngleDataset(StackedDataset):

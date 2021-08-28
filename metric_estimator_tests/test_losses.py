@@ -2,7 +2,7 @@
 import torch
 import unittest
 
-import metric_estimator.losses as losses
+import metric_estimator as losses
 
 
 class LossTest(unittest.TestCase):

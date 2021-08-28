@@ -127,7 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-.idea
 
 data
 ckpt
@@ -136,3 +135,10 @@ tensorboard
 out
 job-sympa.sh
 job_script.sh
+
+
+# pytorch lightning
+lightning_logs/
+
+# JetBrains
+.idea/

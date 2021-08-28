@@ -3,7 +3,7 @@ import torch
 
 from .points import SiegelPointDataset
 from .file import FileDataset
-from .. import io
+from ..legacy import io
 
 
 class VVDDataset(FileDataset):

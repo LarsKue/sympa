@@ -2,7 +2,7 @@
 import torch
 
 from .file import FileDataset
-from .. import io
+from ..legacy import io
 from .. import math
 
 
