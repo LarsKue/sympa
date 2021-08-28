@@ -1,7 +1,7 @@
 
 import pickle
 
-from . import io
+from metric_estimator.legacy import io
 
 
 class LossHistory:
@@ -21,8 +21,9 @@ class LossHistory:
         self.train_loss.append(train_loss)
         self.val_loss.append(val_loss)
 
-    def save(self, path):
+    def save(self, path, overwrite=False):
         path = io.prepare_path(path)
+        io.handle_overwrite(path, overwrite)
         with open(path / "train_loss", "wb+") as f:
             pickle.dump(self.train_loss, f)
 

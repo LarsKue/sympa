@@ -4,7 +4,7 @@ from torch.utils.data import TensorDataset
 
 from .points import SiegelPointDataset
 from .stacked import StackedDataset
-from ..device import device
+from metric_estimator.legacy.device import device
 
 
 class DistanceDataset(StackedDataset):

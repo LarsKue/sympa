@@ -1,285 +1,183 @@
 
+import pytorch_lightning as pl
 import torch
-from torch import nn
-from torch.utils.data import DataLoader
 
-import numpy as np
-from matplotlib import pyplot as plt
+import subprocess as sub
 
-import timeit
+import pathlib
+import re
 
-from metric_estimator import MetricEstimator, DistanceDataset, TransformDataset, VVDDataset, ModelEvaluation
-import metric_estimator.math as math
-import metric_estimator.losses as losses
+import matplotlib.pyplot as plt
 
-from sympa.manifolds import UpperHalfManifold
+from metric_estimator import MetricEstimator
+from metric_estimator import DataModule
 
 
-def performance(metric_estimator: MetricEstimator, dataset: DistanceDataset, n_loops=1000):
-    manifold = metric_estimator.manifold
+def tensorboard():
+    """
+    Create a detached process for tensorboard
+    """
+    args = ["tensorboard", "--logdir", "lightning_logs"]
 
-    z, y = dataset[0]
-
-    z1, z2 = math.transform_ibft(z)
-
-    def net():
-        return metric_estimator.model(z)
-
-    def exact():
-        return manifold.dist(z1, z2)
-
-    net_result = timeit.timeit(net, number=n_loops)
-    exact_result = timeit.timeit(exact, number=n_loops)
-
-    return net_result, exact_result
-
-
-def get_metric_estimator(ndim, model_path, train_path, val_path, loss_path, load_data, load_model, overwrite_data, batch_size, n_train, n_val):
-    manifold = UpperHalfManifold(ndim=ndim)
-    model = nn.Sequential(
-        nn.Linear(in_features=2 * ndim * (ndim + 1), out_features=1024),
-        nn.PReLU(),
-        nn.Linear(in_features=1024, out_features=1024),
-        nn.PReLU(),
-        nn.Linear(in_features=1024, out_features=1024),
-        nn.PReLU(),
-        nn.Linear(in_features=1024, out_features=512),
-        nn.PReLU(),
-        nn.Linear(in_features=512, out_features=ndim),
+    process = sub.Popen(
+        args, shell=False, stdin=None, stdout=None, stderr=None,
+        close_fds=True
     )
 
-    if load_model:
-        state_dict = torch.load(model_path)
-        model.load_state_dict(state_dict)
-    else:
-        # initialize weights
-        for module in model.modules():
-            if type(module) is nn.Linear:
-                data = module.weight.data
-                nn.init.kaiming_normal_(data, nonlinearity="relu")
-
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4)
-    loss = nn.MSELoss()
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=10, factor=0.5,
-                                                              threshold=0.05, verbose=True)
-
-    schedulers = []
-
-    # VVD Datasets
-    if load_data:
-        print("Loading Datasets...")
-        train_set = VVDDataset.load(train_path)
-        val_set = VVDDataset.load(val_path)
-    else:
-        print("Generating Datasets...")
-        train_set = VVDDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
-        val_set = VVDDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
-
-        print("Saving Dataset Metadata...")
-        train_set.save()
-        val_set.save()
-
-    # Distance Datasets
-    # if load_data:
-    #     # TODO
-    #     raise NotImplementedError
-    # else:
-    #     print("Generating Datasets...")
-    #     train_set = DistanceDataset.generate(size=n_train, manifold=manifold, path=train_path, overwrite=overwrite_data)
-    #     val_set = DistanceDataset.generate(size=n_val, manifold=manifold, path=val_path, overwrite=overwrite_data)
-
-    train_set = train_set.with_size(n_train)
-    val_set = val_set.with_size(n_val)
-
-    def transform(tensors):
-        # we want only the bft and the vvd
-        z1, z2, z, vvd = tensors
-        return z, vvd
-
-    train_set = TransformDataset(train_set, transform)
-    val_set = TransformDataset(val_set, transform)
-
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True)
-
-    # data is already in correct shape
-    batch_shape = None
-
-    print("Instantiating...")
-    metric_estimator = MetricEstimator(
-        model,
-        manifold,
-        optimizer,
-        loss,
-        schedulers,
-        train_loader,
-        val_loader,
-        batch_shape
-    )
-
-    if load_model:
-        metric_estimator.history.load(loss_path)
-
-    return metric_estimator
+    return process
 
 
-def sorted_samples(n, model, dataset, loss):
-    l = len(dataset)
-    with ModelEvaluation(model):
-        for i in range(n):
-            idx = np.random.randint(0, l)
-            x, y = dataset[idx]
-            yhat = model(x)
-
-            item_loss = loss(yhat, y)
-
-            print(f"Predicted: {yhat}")
-            print(f"Actual:    {y}")
-            print(f"Sorted:    {math.is_sorted(y)}")
-            print(f"Loss:      {item_loss}")
-            print()
+def checkpoint(version, epoch, step):
+    path = pathlib.Path("lightning_logs")
+    version = pathlib.Path(f"version_{version}")
+    checkpoints = pathlib.Path("checkpoints")
+    cp = pathlib.Path(f"epoch={epoch}-step={step}.ckpt")
+    return str(path / version / checkpoints / cp)
 
 
+def latest_version(path):
+    """
+    Returns latest model version as integer
+    """
+    # unsorted
+    versions = list(str(v.stem) for v in path.glob("version_*"))
+    # get version numbers as integer
+    versions = [re.match(r"version_(\d+)", version) for version in versions]
+    versions = [int(match.group(1)) for match in versions]
+
+    return max(versions)
+
+
+def latest_checkpoint(version=None):
+    """
+    Returns latest checkpoint path for given version (default: latest) as string
+    """
+    path = pathlib.Path("lightning_logs")
+    if version is None:
+        version = latest_version(path)
+    path = path / pathlib.Path(f"version_{version}/checkpoints/")
+
+    # check if last.ckpt exists, and return that if applicable
+    last = path / "last.ckpt"
+    if last.is_file():
+        return str(last)
+
+    # find the last unnamed checkpoint
+    checkpoints = list(str(cp.stem) for cp in path.glob("*.ckpt"))
+
+    # find epoch and step numbers
+    checkpoints = [re.match(r"epoch=(\d+)-step=(\d+)", cp) for cp in checkpoints]
+
+    # assign steps to epochs
+    epoch_steps = {}
+    for match in checkpoints:
+        epoch = match.group(1)
+        step = match.group(2)
+
+        if epoch not in epoch_steps:
+            epoch_steps[epoch] = []
+
+        epoch_steps[epoch].append(step)
+
+    # find highest epoch and step
+    max_epoch = max(epoch_steps.keys())
+    max_step = max(epoch_steps[max_epoch])
+
+    # reconstruct path
+    checkpoint = path / f"epoch={max_epoch}-step={max_step}.ckpt"
+
+    return str(checkpoint)
+
+
+def samples(n, module, data_module):
+    module.eval()
+    for i in range(n):
+        x, y = data_module.val_ds[i]
+        x = x.unsqueeze(0)
+        y = y.unsqueeze(0)
+
+        yhat = module(x)
+
+        print(f"Predicted: {yhat}")
+        print(f"Actual:    {y}")
+        print()
+
+
+def plot_loss_distribution(module, data_module, loss):
+    module.eval()
+
+    def get_losses(ds):
+        losses = []
+        with torch.no_grad():
+            for x, y in ds:
+                x = x.unsqueeze(0)
+                y = y.unsqueeze(0)
+
+                yhat = module(x)
+
+                l = loss(yhat, y)
+
+                losses.append(l.item())
+
+        return losses
+
+    train_losses = get_losses(data_module.train_ds)
+    val_losses = get_losses(data_module.val_ds)
+
+    plt.hist(train_losses, bins=50)
+    plt.hist(val_losses, bins=50)
+    plt.xlabel("Loss")
+    plt.ylabel("Frequency")
+    plt.show()
+
+
+# TODO: Send Email that network works with better than 2% error
+#  mention change to convolutional net improved the network from guessing to ~8% error
+#  further changes to hyperparameters and the data improved this to the above figure of 2%
 def main():
-
-    model_path = "me_model"
-    train_path = "ds_train"
-    val_path = "ds_val"
-    loss_path = "loss_history"
-    load_data = False
-    load_model = False
-    overwrite_data = True
-    overwrite_model = True
-
-    ndim = 15
+    n = 50
+    ndim = 20
     batch_size = 32
-    n_train = 512 * batch_size
-    n_val = 128 * batch_size
-    n_epochs = 200
+    max_epochs = 250
+    val_split = 0.2
 
-    metric_estimator = get_metric_estimator(ndim, model_path, train_path, val_path, loss_path, load_data, load_model,
-                                            overwrite_data, batch_size, n_train, n_val)
+    module = MetricEstimator(ndim)
+    data_module = DataModule(n, ndim, batch_size=batch_size, val_split=val_split)
 
-    print("Fitting...")
-    metric_estimator.fit(epochs=n_epochs, verbosity=2)
+    callbacks = [
+        pl.callbacks.ModelCheckpoint(monitor="val_loss", save_top_k=5, save_last=True),
+        pl.callbacks.EarlyStopping(monitor="val_loss", patience=35),
+        pl.callbacks.LearningRateMonitor(),
+    ]
 
-    print("Saving...")
-    metric_estimator.save_model(model_path, overwrite=overwrite_model)
-    metric_estimator.save_loss(loss_path)
+    trainer = pl.Trainer(
+        max_epochs=max_epochs,
+        callbacks=callbacks,
+        gpus=1,
+    )
 
-    print("Done!")
+    process = tensorboard()
 
-    val_set = metric_estimator.val_loader.dataset
+    print("Launched Tensorboard.")
 
-    loss = losses.L2Loss()
+    trainer.fit(module, data_module)
 
-    model = metric_estimator.model
+    data_module.save()
 
-    sorted_samples(5, model, val_set, loss=loss)
+    # cp = checkpoint(version=40, epoch=168, step=25349)
+    cp = latest_checkpoint()
+    module = MetricEstimator.load_from_checkpoint(cp, ndim=ndim)
+    data_module = DataModule.load()
 
-    n_sorted = 0
-    total_l2 = 0
-    with ModelEvaluation(model):
-        for i, (z, vvd) in enumerate(val_set):
+    samples(10, module, data_module)
+    plot_loss_distribution(module, data_module, loss=module.evaluation_loss)
 
-            predicted = model(z)
-            l = loss(predicted, vvd)
+    print("Press Enter to terminate Tensorboard.")
+    input()
 
-            if math.is_sorted(predicted):
-                n_sorted += 1
-
-            total_l2 += l
-
-    mean_l2 = total_l2 / len(val_set)
-
-    print(f"Sorted: {100.0 * n_sorted / len(val_set):.2f}%")
-    print(f"Mean L2 Loss: {mean_l2}")
-
-    plot_epochs = 1 + np.arange(len(metric_estimator.history))
-
-    plt.figure(figsize=(10, 9))
-    plt.plot(plot_epochs[:-1], metric_estimator.history.train_loss[1:], label="Train")
-    plt.plot(plot_epochs, metric_estimator.history.val_loss, label="Validate")
-
-    min_mse = min(metric_estimator.history.val_loss)
-    props = dict(boxstyle="round", facecolor="lightblue", edgecolor="black", alpha=0.5)
-    text = f"Minimal MSE Loss: {min_mse:.4f}\n" \
-           f"Mean L2 Loss:     {mean_l2:.4f}"
-    fontdict = dict(fontname="monospace", fontsize=14)
-
-    plt.text(0.5, 0.75, text, fontdict=fontdict, transform=plt.gca().transAxes, bbox=props)
-
-    plt.yscale("log")
-
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend(loc="upper right")
-    plt.title("Loss History")
-    plt.savefig("loss_history.png")
-    plt.show()
-
-
-
-    # print("Evaluating performance...")
-    # net, exact = performance(metric_estimator, metric_estimator.val_loader.dataset, n_loops=n_loops)
-
-    # net_times.append(net)
-    # exact_times.append(exact)
-
-
-    # Old performance evaluation code
-
-    # loop_numbers = np.array(loop_numbers)
-    # ndims = np.array(ndims)
-    # net_times = 1e3 * np.array(net_times) / loop_numbers
-    # exact_times = 1e3 * np.array(exact_times) / loop_numbers
-    #
-    # np.save("ndims", ndims)
-    # np.save("net_times", net_times)
-    # np.save("exact_times", exact_times)
-    #
-    # plt.figure(figsize=(10, 9))
-    # plt.plot(ndims, exact_times, label="Exact Algorithm", marker="o")
-    # plt.plot(ndims, net_times, label="Network Approximation", marker="o")
-    #
-    # plt.title("Runtime per Call by Dimension")
-    # plt.xlabel("Dimension")
-    # plt.ylabel("$t / ms$")
-    #
-    # plt.legend()
-    # plt.savefig("runtimes.pdf")
-    # plt.savefig("runtimes.png")
-    # plt.show()
-
-
-def plots():
-    ndims = np.load("ndims.npy")
-    net_times = np.load("net_times.npy")
-    exact_times = np.load("exact_times.npy")
-    ratio = exact_times / net_times
-
-    fig, ax = plt.subplots(figsize=(10, 9))
-    ax.plot(ndims, exact_times, label="Exact Algorithm", marker="o")
-    ax.plot(ndims, net_times, label="Network Approximation", marker="o")
-
-    ax2 = ax.twinx()
-
-    ax2.plot(ndims, ratio, label="Ratio", marker="o", color="green")
-
-    plt.title("Runtime per Call by Dimension")
-    ax.set_xlabel("Dimension")
-    ax.set_ylabel("$t / ms$")
-    ax2.set_ylabel("Speed Ratio")
-
-    h1, l1 = ax.get_legend_handles_labels()
-    h2, l2 = ax2.get_legend_handles_labels()
-
-    ax.legend(h1+h2, l1+l2)
-    plt.savefig("runtimes.pdf")
-    plt.savefig("runtimes.png")
-    plt.show()
+    process.terminate()
 
 
 if __name__ == "__main__":
     main()
-    # plots()
+

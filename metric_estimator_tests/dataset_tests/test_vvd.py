@@ -4,7 +4,7 @@ import torch
 import pathlib as pl
 import shutil
 
-from metric_estimator.datasets import VVDDataset
+from metric_estimator import VVDDataset
 from sympa.manifolds import UpperHalfManifold
 
 

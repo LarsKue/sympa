@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from deprecated import deprecated
 
-from .device import device
+from metric_estimator.legacy.device import device
 
 
 def is_positive_definite(z):
@@ -224,6 +224,7 @@ def _make_spd(g, eigenvalues):
     return s
 
 
+# TODO: this may not be correct for siegel points
 def scale_to_unit_box(z, return_factors=False):
     """
     Scale a batch of Siegel points to the Unit Box [0, 1]

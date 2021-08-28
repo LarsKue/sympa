@@ -4,7 +4,7 @@ import torch
 import pathlib as pl
 import shutil
 
-from metric_estimator.datasets import DistanceDataset
+from metric_estimator import DistanceDataset
 from sympa.manifolds import UpperHalfManifold
 
 
