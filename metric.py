@@ -8,6 +8,7 @@ import pathlib
 import re
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from metric_estimator import MetricEstimator
 from metric_estimator import DataModule
@@ -27,11 +28,14 @@ def tensorboard():
     return process
 
 
-def checkpoint(version, epoch, step):
+def checkpoint(version, last=False, epoch=None, step=None):
     path = pathlib.Path("lightning_logs")
     version = pathlib.Path(f"version_{version}")
     checkpoints = pathlib.Path("checkpoints")
-    cp = pathlib.Path(f"epoch={epoch}-step={step}.ckpt")
+    if last:
+        cp = pathlib.Path(f"last.ckpt")
+    else:
+        cp = pathlib.Path(f"epoch={epoch}-step={step}.ckpt")
     return str(path / version / checkpoints / cp)
 
 
@@ -131,18 +135,26 @@ def plot_loss_distribution(module, data_module, loss):
     plt.show()
 
 
-# TODO: Send Email that network works with better than 2% error
-#  mention change to convolutional net improved the network from guessing to ~8% error
-#  further changes to hyperparameters and the data improved this to the above figure of 2%
+# TODO:
+#  - try really strong regularization (dropout p=0.5, weight decay 1e-4)
+#  - and then train for a long time (until convergence)
+#  - could revert to a fully connected network, and then use pca to reduce feature space,
+#  - but this is a lot of work for possibly no return
+#  - Test Performance
+#  - Send Email
+#  - convolutional nets: 8% error, more tuning: 6.5% error
+#  - wall at 6.5%
+#  - Work on AML
 def main():
-    n = 50
+    n_train = 10000
+    n_val = 1000
+    n_test = 1000
     ndim = 20
     batch_size = 32
     max_epochs = 250
-    val_split = 0.2
 
     module = MetricEstimator(ndim)
-    data_module = DataModule(n, ndim, batch_size=batch_size, val_split=val_split)
+    data_module = DataModule(n_train, n_val, n_test, ndim, batch_size=batch_size)
 
     callbacks = [
         pl.callbacks.ModelCheckpoint(monitor="val_loss", save_top_k=5, save_last=True),
@@ -162,12 +174,12 @@ def main():
 
     trainer.fit(module, data_module)
 
-    data_module.save()
+    # test the best checkpoint (determined by lightning)
+    trainer.test()
 
     # cp = checkpoint(version=40, epoch=168, step=25349)
     cp = latest_checkpoint()
     module = MetricEstimator.load_from_checkpoint(cp, ndim=ndim)
-    data_module = DataModule.load()
 
     samples(10, module, data_module)
     plot_loss_distribution(module, data_module, loss=module.evaluation_loss)
@@ -178,6 +190,44 @@ def main():
     process.terminate()
 
 
+def test():
+    cp = latest_checkpoint(version=72)
+    module = MetricEstimator.load_from_checkpoint(cp, ndim=20)
+
+    data_module = DataModule(n=100, ndim=20, batch_size=32, val_split=0.2)
+
+    data_module.prepare_data()
+
+    ds = data_module.ds
+
+    loss = torch.nn.L1Loss()
+
+    module.eval()
+
+    with torch.no_grad():
+        losses = []
+        predictions = []
+        true = []
+        for x, y in ds:
+            x = x.unsqueeze(0)
+            y = y.unsqueeze(0)
+            yhat = module(x)
+            l = loss(yhat, y)
+            losses.append(l.detach().item())
+            predictions.append(yhat.detach().item())
+            true.append(y.detach().item())
+
+        print("Mean Test Loss:", np.mean(losses))
+        print("Median Test Loss:", np.median(losses))
+
+        plt.hist(losses, bins=50)
+        plt.show()
+
+        plt.hist(predictions, bins=50)
+        plt.hist(true, bins=50)
+        plt.show()
+
+
 if __name__ == "__main__":
     main()
-
+    # test()
